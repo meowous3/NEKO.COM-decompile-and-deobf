@@ -24,7 +24,7 @@ The binary was sourced from [eliot-akira/neko](https://github.com/eliot-akira/ne
 
 ## Sprites
 
-28 sprites (7 states × 4 frames) extracted as 128×128 PNGs (4× nearest-neighbor scaled from 32×32 originals), plus a combined spritesheet.
+28 sprites (7 states × 4 frames) extracted as 32×32 PNGs at original resolution, plus a combined spritesheet.
 
 Each sprite is 384 bytes in the original binary: three 128-byte bitplanes (Blue, Red, Green) at 32 rows × 4 bytes per row. The 3-bit color index maps to the standard PC-9801 8-color palette.
 
