@@ -57,16 +57,11 @@
 ;   Total per frame: 128 x 3 = 384 (0x180) bytes.
 ;   7 states x 4 frames = 28 frames total = 10752 (0x2A00) bytes.
 ;
-; Notes on NEKO_FIXED.COM:
-;   This binary appears to be a post-compilation patched version of the
-;   original NEKO.COM. The patching introduced several byte-offset errors:
-;     1. The entry JMP at 0x0100 targets 0x3303 instead of the intended
-;        0x32FB (or 0x3302), landing mid-instruction.
-;     2. String references in the setup code are off by 2-5 bytes,
-;        truncating the "Neko" prefix from most messages.
-;   These are documented in detail at the relevant code locations.
-;   The annotated disassembly below presents the INTENDED code logic
-;   as reconstructed from the binary, with bug notes where applicable.
+; Note on line endings:
+;   The DOS strings in the binary use CR+LF (0x0D, 0x0A) line endings.
+;   Some copies of this binary found online have been corrupted by
+;   text-mode transfers that either insert or strip CR bytes. This
+;   disassembly targets the original unmodified binary (13177 bytes).
 ;
 ; Memory map (after loading at CS:0100h):
 ;   0100h-0102h   Entry jump
@@ -77,8 +72,8 @@
 ;   0598h-0717h   Blank sprite (384 zero bytes, used for erasing)
 ;   0718h-3117h   Sprite data (7 states x 4 frames x 384 bytes)
 ;   3118h-3136h   PRNG function (called via far pointer)
-;   3137h-3215h   DOS strings (dollar-terminated)
-;   3216h-3471h   Setup / transient code (freed after TSR install)
+;   3137h-321Dh   DOS strings (dollar-terminated)
+;   321Eh-3479h   Setup / transient code (freed after TSR install)
 ;
 ; =============================================================================
 
@@ -90,20 +85,10 @@
 ; =============================================================================
 
 entry:
-        jmp     0x3303                  ; 0100: JMP to setup code
-                                        ;
-                                        ; BUG IN NEKO_FIXED.COM:
-                                        ; The encoded displacement (E9 00 32) targets
-                                        ; 0x3303, which lands 1 byte into the 4-byte
-                                        ; instruction "mov [data_seg_val], ds" at 0x3302.
-                                        ; The intended target was likely 0x32FB (setup_banner)
-                                        ; to print the version banner and then fall through
-                                        ; to the initialization code at 0x3302.
-                                        ;
-                                        ; This annotated disassembly presents the INTENDED
-                                        ; code flow starting from setup_banner (0x32FB),
-                                        ; which prints the banner and falls through to
-                                        ; setup_entry (0x3302) for variable initialization.
+        jmp     0x3303                  ; 0100: JMP to setup_banner (0x3303)
+                                        ; Jumps to setup_banner which prints
+                                        ; the version banner and falls through
+                                        ; to setup_entry for initialization.
 
 ; -----------------------------------------------------------------------------
 ; Metadata block (0x0103 - 0x010F)
@@ -367,14 +352,15 @@ blit_sprite_plane:                      ; 028D
 ; Input:   SI = pointer to sprite data (384 bytes: blue + red + green)
 ; Output:  SI advanced by 384 bytes
 ;
-; The function computes the VRAM offset, sets DS to the code segment
-; (so SI can address sprite data within our memory), and then blits
-; each of the three VRAM planes in sequence.
+; The function waits for VSYNC (to prevent tearing), sets DS to the code
+; segment (so SI can address sprite data), and then blits
+; each of the three VRAM planes in sequence. The VRAM offset is
+; computed by the caller (draw_cat) before calling this function.
 ; -----------------------------------------------------------------------------
 draw_sprite:                            ; 02A6
         push    ax                      ; save AX
         push    ds                      ; save DS
-        call    calc_vram_offset        ; DI = VRAM offset for (cat_x, cat_y)
+        call    wait_vsync              ; sync to vertical blanking (avoid tearing)
         mov     ax, [data_seg_val]      ; AX = our code/data segment
         mov     ds, ax                  ; DS = our segment (sprite data is in CS)
         mov     ax, 0xA800             ; blue VRAM plane
@@ -1156,67 +1142,67 @@ sprite_data:                            ; 0718
 
         ; State 0: Moving Up - Frame 0
         ; (blue plane: 128 bytes, red plane: 128 bytes, green plane: 128 bytes)
-        incbin  "NEKO_FIXED.COM", 0x0618, 384
+        incbin  "NEKO.COM", 0x0618, 384
         ; State 0: Moving Up - Frame 1
-        incbin  "NEKO_FIXED.COM", 0x0798, 384
+        incbin  "NEKO.COM", 0x0798, 384
         ; State 0: Moving Up - Frame 2
-        incbin  "NEKO_FIXED.COM", 0x0918, 384
+        incbin  "NEKO.COM", 0x0918, 384
         ; State 0: Moving Up - Frame 3
-        incbin  "NEKO_FIXED.COM", 0x0A98, 384
+        incbin  "NEKO.COM", 0x0A98, 384
 
         ; State 1: Moving Down - Frame 0
-        incbin  "NEKO_FIXED.COM", 0x0C18, 384
+        incbin  "NEKO.COM", 0x0C18, 384
         ; State 1: Moving Down - Frame 1
-        incbin  "NEKO_FIXED.COM", 0x0D98, 384
+        incbin  "NEKO.COM", 0x0D98, 384
         ; State 1: Moving Down - Frame 2
-        incbin  "NEKO_FIXED.COM", 0x0F18, 384
+        incbin  "NEKO.COM", 0x0F18, 384
         ; State 1: Moving Down - Frame 3
-        incbin  "NEKO_FIXED.COM", 0x1098, 384
+        incbin  "NEKO.COM", 0x1098, 384
 
         ; State 2: Moving Right - Frame 0
-        incbin  "NEKO_FIXED.COM", 0x1218, 384
+        incbin  "NEKO.COM", 0x1218, 384
         ; State 2: Moving Right - Frame 1
-        incbin  "NEKO_FIXED.COM", 0x1398, 384
+        incbin  "NEKO.COM", 0x1398, 384
         ; State 2: Moving Right - Frame 2
-        incbin  "NEKO_FIXED.COM", 0x1518, 384
+        incbin  "NEKO.COM", 0x1518, 384
         ; State 2: Moving Right - Frame 3
-        incbin  "NEKO_FIXED.COM", 0x1698, 384
+        incbin  "NEKO.COM", 0x1698, 384
 
         ; State 3: Moving Left - Frame 0
-        incbin  "NEKO_FIXED.COM", 0x1818, 384
+        incbin  "NEKO.COM", 0x1818, 384
         ; State 3: Moving Left - Frame 1
-        incbin  "NEKO_FIXED.COM", 0x1998, 384
+        incbin  "NEKO.COM", 0x1998, 384
         ; State 3: Moving Left - Frame 2
-        incbin  "NEKO_FIXED.COM", 0x1B18, 384
+        incbin  "NEKO.COM", 0x1B18, 384
         ; State 3: Moving Left - Frame 3
-        incbin  "NEKO_FIXED.COM", 0x1C98, 384
+        incbin  "NEKO.COM", 0x1C98, 384
 
         ; State 4: Sitting Right - Frame 0
-        incbin  "NEKO_FIXED.COM", 0x1E18, 384
+        incbin  "NEKO.COM", 0x1E18, 384
         ; State 4: Sitting Right - Frame 1
-        incbin  "NEKO_FIXED.COM", 0x1F98, 384
+        incbin  "NEKO.COM", 0x1F98, 384
         ; State 4: Sitting Right - Frame 2
-        incbin  "NEKO_FIXED.COM", 0x2118, 384
+        incbin  "NEKO.COM", 0x2118, 384
         ; State 4: Sitting Right - Frame 3
-        incbin  "NEKO_FIXED.COM", 0x2298, 384
+        incbin  "NEKO.COM", 0x2298, 384
 
         ; State 5: Sitting Left - Frame 0
-        incbin  "NEKO_FIXED.COM", 0x2418, 384
+        incbin  "NEKO.COM", 0x2418, 384
         ; State 5: Sitting Left - Frame 1
-        incbin  "NEKO_FIXED.COM", 0x2598, 384
+        incbin  "NEKO.COM", 0x2598, 384
         ; State 5: Sitting Left - Frame 2
-        incbin  "NEKO_FIXED.COM", 0x2718, 384
+        incbin  "NEKO.COM", 0x2718, 384
         ; State 5: Sitting Left - Frame 3
-        incbin  "NEKO_FIXED.COM", 0x2898, 384
+        incbin  "NEKO.COM", 0x2898, 384
 
         ; State 6: Scratching - Frame 0
-        incbin  "NEKO_FIXED.COM", 0x2A18, 384
+        incbin  "NEKO.COM", 0x2A18, 384
         ; State 6: Scratching - Frame 1
-        incbin  "NEKO_FIXED.COM", 0x2B98, 384
+        incbin  "NEKO.COM", 0x2B98, 384
         ; State 6: Scratching - Frame 2
-        incbin  "NEKO_FIXED.COM", 0x2D18, 384
+        incbin  "NEKO.COM", 0x2D18, 384
         ; State 6: Scratching - Frame 3
-        incbin  "NEKO_FIXED.COM", 0x2E98, 384
+        incbin  "NEKO.COM", 0x2E98, 384
 
 ; =============================================================================
 ; SECTION 8: PSEUDO-RANDOM NUMBER GENERATOR
@@ -1259,58 +1245,41 @@ prng_function:                          ; 3118
 ; Dollar-terminated strings used by the setup code for user messages.
 ; Printed via INT 21h AH=09h (DOS print string function).
 ;
-; IMPORTANT NOTE ON STRING REFERENCES:
-; This binary (NEKO_FIXED.COM) has been patched after the original
-; compilation. Some bytes were inserted in the code region between
-; the str_banner reference and the later strings, causing a cumulative
-; offset in the string pointers. As a result, the code's "mov dx"
-; references point 2-5 bytes INTO the strings, truncating the "Neko"
-; prefix. The actual strings in the data are correct; only the code
-; references are slightly off:
-;
-;   str_banner      -> 0x3137 (correct, prints full string)
-;   str_removed     -> 0x3172 (should be 0x3170; prints "ko.com removed.")
-;   str_already     -> 0x3186 (should be 0x3183; prints "o.com already staying.")
-;   str_not_staying -> 0x31A2 (should be 0x319E; prints ".com is not staying now.")
-;   str_cant_remove -> 0x31C1 (should be 0x31BC; prints " program is using...")
-;   str_too_many    -> 0x320A (should be 0x3206; prints "many cats.")
-;
-; This is a cosmetic bug in the FIXED binary. The labels below use
-; the actual string start addresses; the code references in Section 10
-; use the (slightly wrong) addresses found in the binary.
-; =============================================================================
+; All strings use DOS-style CR+LF (0x0D, 0x0A) line endings.
+; The code references (mov dx, ...) point to the correct start
+; of each string.
 
 str_banner:                             ; 3137
-        db      "Neko.com version 0.70", 0x0A
-        db      "Copyright(c) by <tenten> & naoshi", 0x0A, "$"
+        db      "Neko.com version 0.70", 0x0D, 0x0A
+        db      "Copyright(c) by <tenten> & naoshi", 0x0D, 0x0A, "$"
                                         ; Displayed on every invocation
                                         ; Code ref: mov dx, 0x3137 (correct)
 
-str_removed:                            ; 3170
-        db      "Neko.com removed.", 0x0A, "$"
+str_removed:                            ; 3172
+        db      "Neko.com removed.", 0x0D, 0x0A, "$"
                                         ; Printed after successful -r removal
-                                        ; Code ref: mov dx, 0x3172 (2 bytes into string)
+                                        ; Code ref: mov dx, 0x3172 (correct)
 
-str_already:                            ; 3183
-        db      "Neko.com already staying.", 0x0A, "$"
+str_already:                            ; 3186
+        db      "Neko.com already staying.", 0x0D, 0x0A, "$"
                                         ; Printed if already resident (without -f)
-                                        ; Code ref: mov dx, 0x3186 (3 bytes into string)
+                                        ; Code ref: mov dx, 0x3186 (correct)
 
-str_not_staying:                        ; 319E
-        db      "Neko.com is not staying now.", 0x0A, "$"
+str_not_staying:                        ; 31A2
+        db      "Neko.com is not staying now.", 0x0D, 0x0A, "$"
                                         ; Printed if -r used but not resident
-                                        ; Code ref: mov dx, 0x31A2 (4 bytes into string)
+                                        ; Code ref: mov dx, 0x31A2 (correct)
 
-str_cant_remove:                        ; 31BC
-        db      "Other program is using VSYNC or BIOS vector.", 0x0A
-        db      "Neko.com cannot remove now.", 0x0A, "$"
+str_cant_remove:                        ; 31C1
+        db      "Other program is using VSYNC or BIOS vector.", 0x0D, 0x0A
+        db      "Neko.com cannot remove now.", 0x0D, 0x0A, "$"
                                         ; Printed if -r fails (vectors modified)
-                                        ; Code ref: mov dx, 0x31C1 (5 bytes into string)
+                                        ; Code ref: mov dx, 0x31C1 (correct)
 
-str_too_many:                           ; 3206
-        db      "Too many cats.", 0x0A, "$"
+str_too_many:                           ; 320D
+        db      "Too many cats.", 0x0D, 0x0A, "$"
                                         ; Printed if -f exceeds the cat limit
-                                        ; Code ref: mov dx, 0x320A (4 bytes into string)
+                                        ; Code ref: mov dx, 0x320D (correct)
 
 ; =============================================================================
 ; SECTION 10: SETUP / TRANSIENT CODE
@@ -1345,8 +1314,8 @@ str_too_many:                           ; 3206
 ; Clobbers: AX (via INT 21h)
 ; Preserves: ES on return (contains resident segment if CF=1)
 ; -----------------------------------------------------------------------------
-                db      0x00            ; 3216: alignment/padding byte
-check_resident:                         ; 3217
+                db      0x00            ; 321E: alignment/padding byte
+check_resident:                         ; 321F
         push    es
         push    cx
         push    di
@@ -1362,12 +1331,12 @@ check_resident:                         ; 3217
         clc                             ; assume not found (CF=0)
         jnz     .not_resident           ; mismatch -> not our TSR
         stc                             ; all bytes match -> resident! (CF=1)
-.not_resident:                          ; 3230
+.not_resident:                          ; 3238
         pop     si
         pop     di
         pop     cx
         pop     es                      ; ES preserved (resident segment if CF=1)
-        ret                             ; 3234
+        ret                             ; 323C
 
 ; -----------------------------------------------------------------------------
 ; to_lowercase: Convert ASCII character to lowercase
@@ -1375,13 +1344,13 @@ check_resident:                         ; 3217
 ; Input:  AL = character
 ; Output: AL = lowercase if was A-Z, unchanged otherwise
 ; -----------------------------------------------------------------------------
-to_lowercase:                           ; 3235
+to_lowercase:                           ; 323D
         cmp     al, 'A'                ; 0x41
         jl      .done
         cmp     al, 'Z'                ; 0x5A
         jg      .done
         add     al, 0x20               ; convert A-Z to a-z
-.done:                                  ; 323F
+.done:                                  ; 3247
         ret
 
 ; -----------------------------------------------------------------------------
@@ -1400,7 +1369,7 @@ to_lowercase:                           ; 3235
 ;   CF=1: flag not found
 ; Clobbers: AX, CX, DI
 ; -----------------------------------------------------------------------------
-scan_cmdline:                           ; 3240
+scan_cmdline:                           ; 3248
         mov     di, 0x0080              ; DI -> PSP command tail length byte
         mov     cl, [bp+si]            ; CL = command tail length
                                         ;   (BP and SI are 0 at COM entry,
@@ -1416,7 +1385,7 @@ scan_cmdline:                           ; 3240
         xor     ch, ch                  ; CX = length of command tail
 
         mov     al, '-'                ; character to scan for
-.scan_loop:                             ; 324A
+.scan_loop:                             ; 3252
         repne   scasb                   ; scan for next '-' in ES:DI
         jnz     .not_found              ; reached end without finding '-'
         push    ax                      ; save AX
@@ -1426,10 +1395,10 @@ scan_cmdline:                           ; 3240
         pop     ax                      ; restore AX
         jnz     .scan_loop             ; no match -> keep scanning
         clc                             ; found! CF=0
-        ret                             ; 325A
-.not_found:                             ; 325B
+        ret                             ; 3262
+.not_found:                             ; 3263
         stc                             ; not found: CF=1
-        ret                             ; 325C
+        ret                             ; 3264
 
 ; -----------------------------------------------------------------------------
 ; try_remove: Attempt to remove the resident copy from memory
@@ -1447,7 +1416,7 @@ scan_cmdline:                           ; 3240
 ;   CF=0: successfully removed
 ;   CF=1: cannot remove (vectors modified by another program)
 ; -----------------------------------------------------------------------------
-try_remove:                             ; 325D
+try_remove:                             ; 3265
         push    ds
         push    es
 
@@ -1510,9 +1479,9 @@ try_remove:                             ; 325D
         clc                             ; success: CF=0
         pop     es
         pop     ds
-        ret                             ; 32B0
+        ret                             ; 32B8
 
-.unsafe:                                ; 32B1
+.unsafe:                                ; 32B9
         ; Cannot safely remove: another TSR has hooked our vectors
         sti                             ; ensure interrupts are enabled
         jmp     short .unsafe_exit      ; jump to the return path
@@ -1522,8 +1491,8 @@ try_remove:                             ; 325D
                                         ;  this actually returns CF=0. The caller
                                         ;  checks differently -- see setup code.)
                                         ; Actually examining the jump target:
-                                        ;  0x32B2: EB FA -> jmp short 0x32AE
-                                        ;  0x32AE is: F8 = clc, 07 = pop es, 1F = pop ds, C3 = ret
+                                        ;  0x32BA: EB FA -> jmp short 0x32B6
+                                        ;  0x32B6 is: F8 = clc, 07 = pop es, 1F = pop ds, C3 = ret
                                         ;  So this returns CF=0 (success) even on failure!
                                         ;  This appears to be a bug or the failure
                                         ;  path is handled differently in the caller.
@@ -1537,13 +1506,13 @@ try_remove:                             ; 325D
 ; Input:  AX = VRAM plane segment (0A800h, 0B000h, or 0B800h)
 ; Clobbers: ES, DI, CX, AX
 ; -----------------------------------------------------------------------------
-clear_vram_plane:                       ; 32B4
+clear_vram_plane:                       ; 32BC
         mov     di, 0x0000              ; start at offset 0
         mov     es, ax                  ; ES = plane segment
         mov     cx, 0x3E80              ; CX = 16000 words = 32000 bytes
         mov     ax, 0x0000              ; fill value = 0
         rep     stosw                   ; clear the entire plane
-        ret                             ; 32C1
+        ret                             ; 32C9
 
 ; -----------------------------------------------------------------------------
 ; cleanup_screen: Erase cat, clear VRAM, restore display settings
@@ -1557,13 +1526,13 @@ clear_vram_plane:                       ; 32B4
 ;   5. Enable graphics display (INT 18h AH=42h, CH=C0h)
 ;   6. Show INT 33h mouse cursor (if active)
 ; -----------------------------------------------------------------------------
-cleanup_screen:                         ; 32C2
+cleanup_screen:                         ; 32CA
         ; Hide mouse cursor if using INT 33h driver
         cmp     byte [flag_mouse_drv], 0x00
         jz      .no_mouse_hide
         mov     ax, 0x0002              ; INT 33h function 2: hide cursor
         int     0x33
-.no_mouse_hide:                         ; 32CE
+.no_mouse_hide:                         ; 32D6
 
         ; Hide the hardware text cursor
         mov     ah, 0x41               ; INT 18h AH=41h: stop cursor display
@@ -1589,7 +1558,7 @@ cleanup_screen:                         ; 32C2
         jz      .no_mouse_show
         mov     ax, 0x0001              ; INT 33h function 1: show cursor
         int     0x33
-.no_mouse_show:                         ; 32FA
+.no_mouse_show:                         ; 3302
         ret
 
 ; =============================================================================
@@ -1611,19 +1580,19 @@ cleanup_screen:                         ; 32C2
 ;      c. Resident, no -f -> error "already staying"
 ; =============================================================================
 
-; Note: there are a few bytes of preamble code (0x32FB-0x3302) that
+; Note: there are a few bytes of preamble code (0x3303-0x330A) that
 ; set up the banner print before falling through to the main entry.
-; The JMP at 0x0100 targets 0x3303, but the setup actually begins
-; at 0x32FB with the banner print.
+; The JMP at 0x0100 targets 0x3303 (setup_banner), which prints the
+; version banner and falls through to setup_entry (0x330A).
 
-setup_banner:                           ; 32FB
+setup_banner:                           ; 3303
         mov     ah, 0x09               ; DOS function 09h: print string
         mov     dx, 0x3137              ; DX -> str_banner ("Neko.com version 0.70...")
         int     0x21                    ; print the version banner
 
-setup_entry:                            ; 3302 (intended entry point)
+setup_entry:                            ; 330A
         ; Save our segment for the resident code's use
-        mov     [data_seg_val], ds      ; 3302: resident draw_sprite needs this
+        mov     [data_seg_val], ds      ; 330A: resident draw_sprite needs this
                                         ;   (stores CS value so the ISR can set DS
                                         ;    to access sprite data in our segment)
 
@@ -1639,7 +1608,7 @@ setup_entry:                            ; 3302 (intended entry point)
                                         ;    or a specific keyboard state)
         jz      .not_hires
         mov     byte [flag_hires], 0x01 ; set high-resolution flag
-.not_hires:                             ; 331D
+.not_hires:                             ; 3325
 
 ; --- Parse command-line flags ---
 
@@ -1653,43 +1622,42 @@ setup_entry:                            ; 3302 (intended entry point)
         jc      .resident_try_remove    ; yes -> try to remove it
         jmp     .err_not_staying        ; no -> error: nothing to remove
 
-.resident_try_remove:                   ; 332C
+.resident_try_remove:                   ; 3334
         call    try_remove              ; attempt uninstallation
         jc      .err_vectors_busy       ; failed? -> error: vectors busy
         jmp     .removal_success        ; success -> print message and exit
 
-.err_vectors_busy:                      ; 3334
+.err_vectors_busy:                      ; 333C
         ; Removal failed: another program has hooked the vectors
         mov     ah, 0x09
-        mov     dx, 0x31C1              ; -> str_cant_remove+5 (prints " program is using...")
-                                        ;    (see string reference note in Section 9)
+        mov     dx, 0x31C1              ; -> str_cant_remove (prints "Other program is using...")
         int     0x21
         mov     ax, 0x4C03             ; exit with return code 3
         int     0x21
 
 ; --- No -r flag: parse remaining options ---
-.no_remove:                             ; 3340
+.no_remove:                             ; 3348
 
         ; Check for -g (GDC cursor display) flag
         mov     dl, 'g'                ; 0x67
         call    scan_cmdline
         jc      .no_g_flag
         mov     byte [flag_show_cursor], 0x01  ; enable GDC cursor during updates
-.no_g_flag:                             ; 334C
+.no_g_flag:                             ; 3354
 
         ; Check for -m (mouse driver) flag
         mov     dl, 'm'                ; 0x6D
         call    scan_cmdline
         jc      .no_m_flag
         mov     byte [flag_mouse_drv], 0x01  ; use INT 33h mouse driver
-.no_m_flag:                             ; 3358
+.no_m_flag:                             ; 3360
 
         ; Check for -o (offset/distance) flag
         mov     dl, 'o'                ; 0x6F
         call    scan_cmdline
         jc      .no_o_flag
         mov     word [cat_speed], 0x0004     ; cat stops 4 columns from cursor
-.no_o_flag:                             ; 3365
+.no_o_flag:                             ; 336D
 
         ; Check if NEKO is already resident
         call    check_resident          ; compare our code with INT 0Ah handler
@@ -1699,7 +1667,7 @@ setup_entry:                            ; 3302 (intended entry point)
 ; =============================================================================
 ; First installation: hook vectors and go resident
 ; =============================================================================
-.first_install:                         ; 336D
+.first_install:                         ; 3375
 
         ; Adjust tick rate for high-resolution mode
         cmp     byte [flag_hires], 0x00 ; hi-res mode detected?
@@ -1707,7 +1675,7 @@ setup_entry:                            ; 3302 (intended entry point)
         mov     word [tick_rate], 0x0002 ; VSYNC is slower in hi-res (~31 Hz),
                                         ;   so update more frequently (every 2 ticks
                                         ;   instead of 10) to maintain speed
-.rate_ok:                               ; 337A
+.rate_ok:                               ; 3382
 
         ; --- Hook INT 0Ah (VSYNC interrupt / IRQ2) ---
         mov     ax, 0x350A              ; DOS: get current INT 0Ah vector
@@ -1767,7 +1735,7 @@ setup_entry:                            ; 3302 (intended entry point)
         int     0x21                    ; terminate and stay resident!
                                         ;   DX paragraphs remain in memory.
 
-.tsr_small:                             ; 33D8
+.tsr_small:                             ; 33E0
         ; -f mode TSR: keep only up to the PRNG seed
         ; (sprite data is shared from the first cat's segment via data_seg_val)
         mov     dx, rng_seed            ; DX = 0x0596 (end of minimal resident region)
@@ -1780,10 +1748,9 @@ setup_entry:                            ; 3302 (intended entry point)
 ; =============================================================================
 ; Removal success message and clean exit
 ; =============================================================================
-.removal_success:                       ; 33E5
+.removal_success:                       ; 33ED
         mov     ah, 0x09
-        mov     dx, 0x3172              ; -> str_removed+2 (prints "ko.com removed.")
-                                        ;    (see string reference note in Section 9)
+        mov     dx, 0x3172              ; -> str_removed (prints "Neko.com removed.")
         int     0x21
         out     0x64, al               ; acknowledge interrupt (cleanup)
         mov     ax, 0x4C00              ; DOS: exit with return code 0 (success)
@@ -1792,7 +1759,7 @@ setup_entry:                            ; 3302 (intended entry point)
 ; =============================================================================
 ; Already resident: try -f (add another cat) or report error
 ; =============================================================================
-.already_resident:                      ; 33F3
+.already_resident:                      ; 33FB
 
         ; Check for -f (follow / add cat) flag
         mov     dl, 'f'                ; 0x66
@@ -1847,31 +1814,28 @@ setup_entry:                            ; 3302 (intended entry point)
 ; =============================================================================
 
 ; --- Error: already resident without -f ---
-.err_already:                           ; 344D
+.err_already:                           ; 3455
         mov     ah, 0x09
-        mov     dx, 0x3186              ; -> str_already+3 (prints "o.com already staying.")
-                                        ;    (see string reference note in Section 9)
+        mov     dx, 0x3186              ; -> str_already (prints "Neko.com already staying.")
         int     0x21
         mov     ax, 0x4C02              ; exit with return code 2
         int     0x21
 
 ; --- Error: too many cats (cat_speed >= 36) ---
-.err_too_many:                          ; 3459
+.err_too_many:                          ; 3461
         mov     ah, 0x09
-        mov     dx, 0x320A              ; -> str_too_many+4 (prints "many cats.")
-                                        ;    (see string reference note in Section 9)
+        mov     dx, 0x320D              ; -> str_too_many (prints "Too many cats.")
         int     0x21
         mov     ax, 0x4C02              ; exit with return code 2
         int     0x21
 
 ; --- Error: -r used but not resident ---
-.err_not_staying:                       ; 3465
+.err_not_staying:                       ; 346D
         mov     ah, 0x09
-        mov     dx, 0x31A2              ; -> str_not_staying+4 (prints ".com is not staying now.")
-                                        ;    (see string reference note in Section 9)
+        mov     dx, 0x31A2              ; -> str_not_staying (prints "Neko.com is not staying now.")
         int     0x21
         mov     ax, 0x4C02              ; exit with return code 2
         int     0x21
 
 ; --- End of file ---
-        db      0x0A                    ; 3471: trailing newline (end of COM file)
+        db      0x0A                    ; 3479: trailing newline (end of COM file)
